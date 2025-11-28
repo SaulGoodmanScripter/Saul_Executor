@@ -105,7 +105,8 @@ local GameDatabase = {
             {"⛵ Build A Boat Script", "https://raw.githubusercontent.com/TheRealAsu/BABFT/refs/heads/main/Source.lua"}
         },
          {"🥇Farm script", "https://raw.githubusercontent.com/Theo985/AetherX-Hub/refs/heads/main/BABFT"}
-        },
+        }
+},
     [126884695634066] = { -- Grow a Garden
         name = "Grow a Garden", 
         scripts = {
@@ -128,12 +129,6 @@ local GameDatabase = {
         name = "Murder Mystery 2", 
         scripts = {
             {"🔪 MM2 Script", "https://raw.githubusercontent.com/CMD-X/CMD-X/master/Source", "Murder Mystery 2 скрипт"}
-        }
-    },
-    [286090429] = { -- Arsenal
-        name = "Arsenal",
-        scripts = {
-            {"🔫 Arsenal Script", "https://raw.githubusercontent.com/FluxusExec/Arsenal/main/script.lua"}
         }
     }
 }
