@@ -1,0 +1,248 @@
+import asyncio
+import time
+import re
+from telethon import TelegramClient
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+
+print("=" * 70)
+print("🤖 TELEGRAM БОТ ДЛЯ КЛЮЧЕЙ")
+print("=" * 70)
+
+# ========== НАСТРОЙКИ ==========
+# ТВОИ USER API (для @kuliscriptbot)
+USER_API_ID = 32711756
+USER_API_HASH = '788fb0beaa018613251d75575d769fed'
+TARGET_BOT = '@kuliscriptbot'
+
+# ТОКЕН ТВОЕГО БОТА (получи у @BotFather)
+BOT_TOKEN = "8467141821:AAHPwF9_-GTcojQqXfBpVR234j6vyzMMX68"
+
+# ========== USER CLIENT (для работы с @kuliscriptbot) ==========
+class KuliscriptProcessor:
+    def __init__(self):
+        self.client = None
+        self.user_queues = {}  # Очереди для пользователей
+        self.user_cooldowns = {}  # Время последнего запроса
+        
+    async def start(self):
+        """Запуск клиента"""
+        try:
+            self.client = TelegramClient('kuli_processor', USER_API_ID, USER_API_HASH)
+            await self.client.start()
+            print("✅ User client started")
+            return True
+        except Exception as e:
+            print(f"❌ Ошибка: {e}")
+            return False
+    
+    async def find_button(self):
+        """Найти кнопку 'Обойти ключ'"""
+        try:
+            bot = await self.client.get_entity(TARGET_BOT)
+            await self.client.send_message(bot, '/start')
+            await asyncio.sleep(2)
+            
+            messages = await self.client.get_messages(bot, limit=5)
+            
+            for msg in messages:
+                if not msg.out and msg.buttons:
+                    for row in msg.buttons:
+                        for button in row:
+                            if any(x in button.text.lower() for x in ['обойти', 'bypass', 'ключ']):
+                                return button.text
+            return None
+        except:
+            return None
+    
+    def can_send(self, user_id):
+        """Можно ли отправлять запрос"""
+        if user_id not in self.user_cooldowns:
+            return True, 0
+        
+        current_time = time.time()
+        time_since_last = current_time - self.user_cooldowns[user_id]
+        
+        if time_since_last < 60:  # 60 секунд пауза
+            wait_time = 60 - time_since_last
+            return False, wait_time
+        
+        return True, 0
+    
+    async def process_link_for_user(self, user_id, link):
+        """Обработать ссылку и получить ключ"""
+        try:
+            # Проверяем паузу
+            can_send, wait_time = self.can_send(user_id)
+            if not can_send:
+                return f"wait:{int(wait_time)}"
+            
+            bot = await self.client.get_entity(TARGET_BOT)
+            
+            # 1. Нажимаем кнопку
+            button_text = await self.find_button()
+            if button_text:
+                messages = await self.client.get_messages(bot, limit=5)
+                for msg in messages:
+                    if not msg.out and msg.buttons:
+                        for row in msg.buttons:
+                            for button in row:
+                                if button.text == button_text:
+                                    await msg.click(text=button_text)
+                                    await asyncio.sleep(2)
+                                    break
+            
+            # 2. Отправляем ссылку
+            await self.client.send_message(bot, link)
+            self.user_cooldowns[user_id] = time.time()
+            
+            # 3. Ждем 45 секунд
+            await asyncio.sleep(45)
+            
+            # 4. Получаем последние сообщения
+            messages = await self.client.get_messages(bot, limit=5)
+            
+            # 5. Ищем КЛЮЧ (только ключ!)
+            for msg in messages:
+                if not msg.out:
+                    text = msg.text
+                    
+                    # Ищем ключ FREE_xxxxxxxx
+                    key_match = re.search(r'(FREE|KEY_)[a-fA-F0-9]{20,}', text)
+                    if key_match:
+                        return key_match.group(0)
+                    
+                    # Ищем ссылку
+                    url_match = re.search(r'https?://[^\s]+', text)
+                    if url_match:
+                        return url_match.group(0)
+            
+            return None
+            
+        except Exception as e:
+            print(f"❌ Ошибка обработки: {e}")
+            return None
+
+# ========== TELEGRAM БОТ ==========
+class CleanKeyBot:
+    def __init__(self):
+        self.processor = KuliscriptProcessor()
+        self.bot_app = None
+        
+    async def start(self):
+        """Запуск системы"""
+        if not await self.processor.start():
+            return False
+        
+        self.bot_app = Application.builder().token(BOT_TOKEN).build()
+        
+        # Обработчики
+        self.bot_app.add_handler(CommandHandler("start", self.start_cmd))
+        self.bot_app.add_handler(CommandHandler("help", self.help_cmd))
+        self.bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
+        
+        print("✅ Бот запущен!")
+        return True
+    
+    async def start_cmd(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /start"""
+        await update.message.reply_text(
+            "🔑 *Бот для получения ключей*\n\n"
+            "Просто отправьте мне Delta ссылку.\n"
+            "Я отправлю её в @kuliscriptbot и пришлю вам ключ.\n\n"
+            "⏰ *Пауза между запросами:* 60 секунд\n"
+            "🔄 *Работает с:* loot-link.com, delta-app.com\n\n"
+            "📎 *Пример ссылки:*\n"
+            "`https://loot-link.com/?r=Base64Code`",
+            parse_mode='Markdown'
+        )
+    
+    async def help_cmd(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Команда /help"""
+        await update.message.reply_text(
+            "📋 *Как использовать:*\n"
+            "1. Отправьте Delta ссылку\n"
+            "2. Бот обработает её\n"
+            "3. Вы получите ключ\n\n"
+            "⏰ *Пауза:* 60 секунд между запросами\n"
+            "🔑 *Формат ключа:* FREE_xxxxxxxx\n\n"
+            "❓ *Проблемы?* Перезапустите бота командой /start"
+        )
+    
+    async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработка сообщений"""
+        user_id = update.effective_user.id
+        text = update.message.text
+        
+        # Игнорируем команды
+        if text.startswith('/'):
+            return
+        
+        # Проверяем ссылку
+        if not ('http://' in text or 'https://' in text):
+            await update.message.reply_text("❌ Отправьте ссылку (начинается с http)")
+            return
+        
+        # Статус
+        status_msg = await update.message.reply_text("🔄 *Обрабатываю...*")
+        
+        try:
+            # Обрабатываем
+            result = await self.processor.process_link_for_user(user_id, text)
+            
+            if result and result.startswith("wait:"):
+                wait_seconds = int(result.split(":")[1])
+                await status_msg.edit_text(f"⏳ *Подождите {wait_seconds} секунд*")
+            
+            elif result:
+                # Показываем ТОЛЬКО ключ/ссылку
+                await status_msg.edit_text(f"✅ *Ключ получен:*\n`{result}`")
+                
+                # Доп. информация если это ссылка
+                if 'http' in result and 'pastebin.com' in result:
+                    raw_link = result.replace('pastebin.com/', 'pastebin.com/raw/')
+                    await update.message.reply_text(f"⚡ *Прямая ссылка:*\n`{raw_link}`")
+            
+            else:
+                await status_msg.edit_text("❌ *Не удалось получить ключ*")
+                
+        except Exception as e:
+            await status_msg.edit_text(f"❌ *Ошибка:* `{str(e)[:50]}`")
+    
+    async def run(self):
+        """Запуск бота"""
+        await self.bot_app.initialize()
+        await self.bot_app.start()
+        await self.bot_app.updater.start_polling()
+        
+        print("📱 Бот запущен в Telegram!")
+        print("⏳ Ожидаю сообщения...")
+        
+        while True:
+            await asyncio.sleep(1)
+
+# ========== ЗАПУСК ==========
+async def main():
+    if BOT_TOKEN == "ВАШ_ТОКЕН_БОТА":
+        print("❌ ЗАМЕНИТЕ BOT_TOKEN!")
+        print("\n📝 Получите у @BotFather")
+        return
+    
+    bot = CleanKeyBot()
+    
+    if await bot.start():
+        await bot.run()
+
+if __name__ == "__main__":
+    try:
+        from telethon import TelegramClient
+        from telegram import Update
+        
+        print("🚀 Запускаю бота...")
+        asyncio.run(main())
+        
+    except ImportError:
+        print("❌ Установите библиотеки:")
+        print("1. telethon")
+        print("2. python-telegram-bot")
+        print("\n📦 Pydroid → Меню → Pip → установите обе")
