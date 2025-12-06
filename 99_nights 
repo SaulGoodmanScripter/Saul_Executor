@@ -52,7 +52,7 @@ local function DragItem(Item)
 end
 
 -- ВКЛАДКА INFO
-local InfoTab = Window:Tab({Title = "ℹ️ Info", Icon = "info"})
+local Tab2 = Window:Tab({Title = "ℹ️ Info", Icon = "info"})
 
 local function getServerInfo()
     local Players = game:GetService("Players")
