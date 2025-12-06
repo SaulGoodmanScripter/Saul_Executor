@@ -622,28 +622,130 @@ end
 local BringItemTab = Window:Tab({Title = "📦 Bring Items", Icon = "package"}) do
     BringItemTab:Section({Title = "Сбор предметов"})
 
-    local function BringItemsByName(name)
-        if DoingTheThings then return end
-        DoingTheThings = true
-        OldCFrameHere = LocalPlayer.Character.HumanoidRootPart.CFrame
-        
-        for _, Obj in pairs(Workspace.Items:GetChildren()) do
-            if Obj.Name == name and Obj:IsA("Model") and Obj.PrimaryPart then 
-                LocalPlayer.Character.HumanoidRootPart.CFrame = Obj.PrimaryPart.CFrame
-                DragItem(Obj)
-                wait(0.15)
-            end 
+    -- Глобальные переменные для этой вкладки
+    local TextBoxText = ""
+    local SearchResults = {}
+    local SelectedItemType = "Все"
+
+    -- Улучшенная функция сбора предметов
+    local function CollectItems(itemList, itemName)
+        if DoingTheThings then 
+            Window:Notify({
+                Title = "⚠️ Внимание",
+                Desc = "Уже выполняется сбор предметов!",
+                Time = 3
+            })
+            return 
         end
         
+        DoingTheThings = true
+        local startTime = tick()
+        
+        -- Сохраняем позицию
+        local character = LocalPlayer.Character
+        if not character then 
+            DoingTheThings = false
+            return 
+        end
+        
+        local hrp = character:WaitForChild("HumanoidRootPart")
+        OldCFrameHere = hrp.CFrame
+        
+        -- Подготовка списка предметов
+        local itemsToCollect = {}
+        for _, item in pairs(itemList) do
+            if item:IsA("Model") and item.PrimaryPart then
+                table.insert(itemsToCollect, {
+                    Object = item,
+                    Distance = (hrp.Position - item.PrimaryPart.Position).Magnitude
+                })
+            end
+        end
+        
+        -- Сортировка по расстоянию
+        table.sort(itemsToCollect, function(a, b)
+            return a.Distance < b.Distance
+        end)
+        
+        local collectedCount = 0
+        local failedCount = 0
+        
+        -- Процесс сбора
+        for i, itemData in ipairs(itemsToCollect) do
+            local item = itemData.Object
+            
+            -- Обновляем UI каждые 5 предметов
+            if i % 5 == 0 then
+                Window:Notify({
+                    Title = "📦 Сбор предметов",
+                    Desc = string.format("Прогресс: %d/%d", i, #itemsToCollect),
+                    Time = 2
+                })
+            end
+            
+            -- Телепорт к предмету
+            hrp.CFrame = item.PrimaryPart.CFrame + Vector3.new(0, 2, 0)
+            wait(0.3)
+            
+            -- Попытка сбора
+            local success = false
+            for attempt = 1, 3 do
+                pcall(function()
+                    for _, tool in pairs(LocalPlayer.Inventory:GetChildren()) do
+                        if tool:IsA("Model") and tool:GetAttribute("NumberItems") and tool:GetAttribute("Capacity") then
+                            if tool:GetAttribute("NumberItems") < tool:GetAttribute("Capacity") then
+                                game:GetService("ReplicatedStorage"):WaitForChild("RemoteEvents"):WaitForChild("RequestBagStoreItem"):InvokeServer(tool, item)
+                                success = true
+                                break
+                            end
+                        end
+                    end
+                end)
+                
+                if success then break end
+                wait(0.1)
+            end
+            
+            if success then
+                collectedCount = collectedCount + 1
+            else
+                failedCount = failedCount + 1
+            end
+            
+            -- Пауза между предметами
+            if i < #itemsToCollect then
+                wait(0.4)
+            end
+        end
+        
+        -- Возвращаемся на место
+        wait(0.5)
+        hrp.CFrame = OldCFrameHere
+        
         DoingTheThings = false
-        LocalPlayer.Character.HumanoidRootPart.CFrame = OldCFrameHere
+        
+        -- Результат
+        Window:Notify({
+            Title = "✅ Сбор завершен",
+            Desc = string.format("Собрано: %d | Не собрано: %d", collectedCount, failedCount),
+            Time = 5
+        })
     end
 
-    local function BringItemsByType(itemTypes)
-        if DoingTheThings then return end
-        DoingTheThings = true
-        OldCFrameHere = LocalPlayer.Character.HumanoidRootPart.CFrame
-        
+    -- Функция сбора по имени
+    local function CollectByName(name)
+        local items = {}
+        for _, Obj in pairs(Workspace.Items:GetChildren()) do
+            if Obj.Name == name and Obj:IsA("Model") and Obj.PrimaryPart then
+                table.insert(items, Obj)
+            end
+        end
+        CollectItems(items, name)
+    end
+
+    -- Функция сбора по типу
+    local function CollectByType(itemTypes)
+        local items = {}
         for _, Obj in pairs(Workspace.Items:GetChildren()) do
             if Obj:IsA("Model") and Obj.PrimaryPart then
                 local found = false
@@ -654,148 +756,292 @@ local BringItemTab = Window:Tab({Title = "📦 Bring Items", Icon = "package"}) 
                     end
                 end
                 if found then
-                    LocalPlayer.Character.HumanoidRootPart.CFrame = Obj.PrimaryPart.CFrame
-                    DragItem(Obj)
-                    wait(0.15)
+                    table.insert(items, Obj)
                 end
-            end   
+            end
         end
-        
-        DoingTheThings = false
-        LocalPlayer.Character.HumanoidRootPart.CFrame = OldCFrameHere
+        CollectItems(items, "Группа предметов")
     end
 
-    BringItemTab:Button({
-        Title = "📦 Все предметы",
-        Desc = "Перенести все предметы",
-        Callback = function()
-            if DoingTheThings then return end
-            DoingTheThings = true
-            OldCFrameHere = LocalPlayer.Character.HumanoidRootPart.CFrame
-            
+    -- Секция быстрого доступа
+    BringItemTab:Section({Title = "🚀 Быстрый доступ"})
+
+    local quickAccessItems = {
+        {"📦 Все предметы", function()
+            local items = {}
             for _, Obj in pairs(Workspace.Items:GetChildren()) do
-                if Obj:IsA("Model") and Obj.PrimaryPart then 
-                    LocalPlayer.Character.HumanoidRootPart.CFrame = Obj.PrimaryPart.CFrame
-                    DragItem(Obj)
-                    wait(0.15)
-                end  
+                if Obj:IsA("Model") and Obj.PrimaryPart then
+                    table.insert(items, Obj)
+                end
             end
-            
-            DoingTheThings = false
-            LocalPlayer.Character.HumanoidRootPart.CFrame = OldCFrameHere
-        end
-    })
-
-    BringItemTab:Section({Title = "Конкретные предметы"})
-
-    local itemsList = {
-        {"🪵 Все бревна", "Log"},
-        {"⚫️ Весь уголь", "Coal"},
-        {"⛽️ Все канистры", "Fuel Canister"},
-        {"🥕 Все морковки", "Carrot"},
-        {"🩹 Все бинты", "Bandage"},
-        {"💊 Все аптечки", "MedKit"},
-        {"📻 Все старые радио", "Old Radio"},
-        {"🛞 Все шины", "Tyre"},
-        {"🌀 Все сломанные вентиляторы", "Broken Fan"},
-        {"🧲 Все болты", "Bolt"},
-        {"🔩 Все металлические листы", "Sheet Metal"},
-        {"🌱 Все коробки семян", "Seed Box"},
-        {"🪑 Все стулья", "Chair"},
-        {"🍰 Все торты", "Cake"},
-        {"🥪 Все сэндвичи", "Meat? Sandwich"}
+            CollectItems(items, "Все предметы")
+        end},
+        {"🪵 Все бревна", function() CollectByName("Log") end},
+        {"⚫️ Весь уголь", function() CollectByName("Coal") end},
+        {"⛽️ Все канистры", function() CollectByName("Fuel Canister") end},
+        {"🩹 Все бинты", function() CollectByName("Bandage") end}
     }
 
-    for _, itemData in ipairs(itemsList) do
+    for _, itemData in ipairs(quickAccessItems) do
+        BringItemTab:Button({
+            Title = itemData[1],
+            Desc = "Быстрый сбор",
+            Callback = itemData[2]
+        })
+    end
+
+    -- Секция материалов
+    BringItemTab:Section({Title = "🛠️ Материалы"})
+
+    local materialItems = {
+        {"🔩 Металлические листы", "Sheet Metal"},
+        {"🧲 Болты", "Bolt"},
+        {"🛞 Шины", "Tyre"},
+        {"🌀 Сломанные вентиляторы", "Broken Fan"},
+        {"📻 Старые радио", "Old Radio"},
+        {"🧰 Коробки семян", "Seed Box"}
+    }
+
+    for _, itemData in ipairs(materialItems) do
         BringItemTab:Button({
             Title = itemData[1],
             Desc = "Собрать " .. itemData[2],
-            Callback = function()
-                BringItemsByName(itemData[2])
-            end
+            Callback = function() CollectByName(itemData[2]) end
         })
     end
 
-    BringItemTab:Section({Title = "Группы предметов"})
+    -- Секция ресурсов
+    BringItemTab:Section({Title = "📚 Ресурсы"})
 
-    local groupItems = {
+    local resourceGroups = {
         {"🛢️ Все топливо", {"Log", "Fuel Canister", "Coal", "Oil Barrel"}},
-        {"🔩 Все запчасти", {"Tyre", "Sheet Metal", "Broken Fan", "Bolt", "Old Radio", "UFO Junk", "UFO Scrap", "Broken Microwave"}},
         {"🔫 Все патроны", {"Rifle Ammo", "Revolver Ammo"}},
-        {"🍎 Вся еда", {"Cake", "Carrot", "Morsel", "Meat? Sandwich"}}
+        {"🍎 Вся еда", {"Cake", "Carrot", "Morsel", "Meat? Sandwich"}},
+        {"🔩 Все запчасти", {"Tyre", "Sheet Metal", "Broken Fan", "Bolt", "Old Radio", "UFO Junk", "UFO Scrap", "Broken Microwave"}}
     }
 
-    for _, groupData in ipairs(groupItems) do
+    for _, groupData in ipairs(resourceGroups) do
         BringItemTab:Button({
             Title = groupData[1],
-            Desc = "Собрать группу предметов",
-            Callback = function()
-                BringItemsByType(groupData[2])
-            end
+            Desc = "Собрать группу",
+            Callback = function() CollectByType(groupData[2]) end
         })
     end
 
-    BringItemTab:Button({
-        Title = "👶 Все дети",
-        Desc = "Перенести всех детей",
-        Callback = function()
-            if DoingTheThings then return end
-            DoingTheThings = true
-            OldCFrameHere = LocalPlayer.Character.HumanoidRootPart.CFrame
-            
-            for _, Obj in pairs(Workspace.Characters:GetChildren()) do
-                if Obj:IsA("Model") and Obj.PrimaryPart and (Obj.Name == "Lost Child" or Obj.Name == "Lost Child2" or Obj.Name == "Lost Child3" or Obj.Name == "Lost Child4") then 
-                    LocalPlayer.Character.HumanoidRootPart.CFrame = Obj.PrimaryPart.CFrame
-                    DragItem(Obj)
-                    wait(0.15)
-                end  
-            end
-            
-            DoingTheThings = false
-            LocalPlayer.Character.HumanoidRootPart.CFrame = OldCFrameHere
-        end
+    -- Секция поиска
+    BringItemTab:Section({Title = "🔍 Поиск предметов"})
+
+    -- Статистика поиска
+    local searchStats = BringItemTab:Label({
+        Title = "Результаты поиска",
+        Desc = "Введите название предмета для поиска"
     })
 
-    BringItemTab:Section({Title = "Поиск по имени"})
-
-    local itemSearchLabel = BringItemTab:Label({
-        Title = "Поиск предмета",
-        Desc = "Введите название предмета"
-    })
-
-    local itemSearchBox = BringItemTab:Textbox({
-        Title = "🔍 Поиск предмета",
-        Desc = "Название предмета (используйте ESP)",
+    -- Поле поиска
+    local searchBox = BringItemTab:Textbox({
+        Title = "Название предмета",
+        Desc = "Используйте ESP для точного названия",
         Placeholder = "Введите название...",
         Value = "",
         ClearText = false,
         Callback = function(text)
             TextBoxText = text
-            isInTheMap = "нет"
-            HowManyItemCanShowUp = 0
+            SearchResults = {}
             
-            for _, Obj in pairs(Workspace.Items:GetChildren()) do
-                if Obj.Name == TextBoxText and Obj:IsA("Model") and Obj.PrimaryPart then 
-                    HowManyItemCanShowUp = HowManyItemCanShowUp + 1
-                    isInTheMap = "да"
-                end 
+            if text and text ~= "" then
+                local count = 0
+                local positions = {}
+                
+                for _, Obj in pairs(Workspace.Items:GetChildren()) do
+                    if Obj.Name == text and Obj:IsA("Model") and Obj.PrimaryPart then 
+                        count = count + 1
+                        table.insert(SearchResults, Obj)
+                        table.insert(positions, Obj.PrimaryPart.Position)
+                    end 
+                end
+                
+                searchStats:SetDesc(string.format("Найдено: %d предметов\nНазвание: %s", count, text))
+                
+                if count > 0 then
+                    Window:Notify({
+                        Title = "🔍 Результаты поиска",
+                        Desc = string.format("Найдено %d предметов: %s", count, text),
+                        Time = 3
+                    })
+                end
             end
-            
-            itemSearchLabel:SetDesc(string.format("Предмет найден: %s (x%d)", isInTheMap, HowManyItemCanShowUp))
+        end
+    })
+
+    -- Кнопки управления поиском
+    BringItemTab:Button({
+        Title = "📦 Собрать найденное",
+        Desc = "Собрать все найденные предметы",
+        Callback = function()
+            if #SearchResults > 0 then
+                CollectItems(SearchResults, TextBoxText)
+            else
+                Window:Notify({
+                    Title = "⚠️ Нет результатов",
+                    Desc = "Сначала выполните поиск предметов",
+                    Time = 3
+                })
+            end
         end
     })
 
     BringItemTab:Button({
-        Title = "📦 Перенести найденное",
-        Desc = "Перенести предметы по названию",
+        Title = "📍 Показать на карте",
+        Desc = "Показать расположение предметов",
         Callback = function()
-            if TextBoxText and TextBoxText ~= "" then
-                BringItemsByName(TextBoxText)
+            if #SearchResults > 0 then
+                Window:Notify({
+                    Title = "📍 Расположение предметов",
+                    Desc = string.format("Найдено %d предметов типа: %s", #SearchResults, TextBoxText),
+                    Time = 4
+                })
+                
+                -- Включаем ESP для найденных предметов
+                for _, item in ipairs(SearchResults) do
+                    if not item:FindFirstChildOfClass("Highlight") then
+                        local highlight = Instance.new("Highlight")
+                        highlight.Name = "Search_Highlight"
+                        highlight.Adornee = item
+                        highlight.FillColor = Color3.fromRGB(255, 0, 255)
+                        highlight.FillTransparency = 0.5
+                        highlight.OutlineColor = Color3.fromRGB(255, 0, 255)
+                        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                        highlight.Parent = item
+                        
+                        -- Убираем через 10 секунд
+                        task.delay(10, function()
+                            if highlight then
+                                highlight:Destroy()
+                            end
+                        end)
+                    end
+                end
             end
         end
     })
-end
 
+    -- Секция специального сбора
+    BringItemTab:Section({Title = "🎯 Специальный сбор"})
+
+    BringItemTab:Button({
+        Title = "👶 Собрать детей",
+        Desc = "Перенести всех потерянных детей",
+        Callback = function()
+            local children = {}
+            for _, Obj in pairs(Workspace.Characters:GetChildren()) do
+                if Obj:IsA("Model") and Obj.PrimaryPart and 
+                   (Obj.Name == "Lost Child" or Obj.Name == "Lost Child2" or 
+                    Obj.Name == "Lost Child3" or Obj.Name == "Lost Child4") then 
+                    table.insert(children, Obj)
+                end  
+            end
+            
+            if #children > 0 then
+                CollectItems(children, "Дети")
+            else
+                Window:Notify({
+                    Title = "⚠️ Дети не найдены",
+                    Desc = "На карте нет потерянных детей",
+                    Time = 3
+                })
+            end
+        end
+    })
+
+    BringItemTab:Button({
+        Title = "🦊 Собрать торговца",
+        Desc = "Найти и собрать торговца",
+        Callback = function()
+            local traders = {}
+            for _, Obj in pairs(Workspace.Characters:GetChildren()) do
+                if Obj:IsA("Model") and Obj.PrimaryPart and Obj.Name == "Pelt Trader" then 
+                    table.insert(traders, Obj)
+                end  
+            end
+            
+            if #traders > 0 then
+                CollectItems(traders, "Торговец")
+            else
+                Window:Notify({
+                    Title = "⚠️ Торговец не найден",
+                    Desc = "Торговец мехом не найден на карте",
+                    Time = 3
+                })
+            end
+        end
+    })
+
+    -- Секция настроек сбора
+    BringItemTab:Section({Title = "⚙️ Настройки сбора"})
+
+    local autoReturnToggle = false
+    BringItemTab:Toggle({
+        Title = "🔄 Автовозврат",
+        Desc = "Автоматически возвращаться на место",
+        Value = true,
+        Callback = function(v)
+            autoReturnToggle = v
+        end
+    })
+
+    local collectDelay = 0.5
+    BringItemTab:Slider({
+        Title = "⏱️ Задержка сбора",
+        Desc = "Пауза между сбором предметов",
+        Min = 0.1,
+        Max = 2,
+        Rounding = 1,
+        Value = 0.5,
+        Callback = function(val)
+            collectDelay = val
+        end
+    })
+
+    -- Информационная панель
+    BringItemTab:Section({Title = "📊 Статистика"})
+
+    local infoPanel = BringItemTab:Label({
+        Title = "Статус сбора",
+        Desc = "Готов к работе"
+    })
+
+    -- Функция обновления статистики
+    local function UpdateStats()
+        local itemCount = 0
+        for _ in pairs(Workspace.Items:GetChildren()) do
+            itemCount = itemCount + 1
+        end
+        
+        local charCount = 0
+        for _, char in pairs(Workspace.Characters:GetChildren()) do
+            if char:IsA("Model") then
+                charCount = charCount + 1
+            end
+        end
+        
+        infoPanel:SetDesc(string.format("Предметов на карте: %d\nПерсонажей: %d", itemCount, charCount))
+    end
+
+    -- Обновляем статистику каждые 10 секунд
+    task.spawn(function()
+        while true do
+            UpdateStats()
+            wait(10)
+        end
+    end)
+
+    -- Кнопка обновления
+    BringItemTab:Button({
+        Title = "🔄 Обновить статистику",
+        Desc = "Обновить информацию о предметах",
+        Callback = UpdateStats
+    })
+end
 -- ВКЛАДКА DISCORD
 local DiscordTab = Window:Tab({Title = "💬 Discord", Icon = "message-circle"}) do
     DiscordTab:Section({Title = "Сообщество"})
