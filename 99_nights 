@@ -622,7 +622,45 @@ end
 local BringItemTab = Window:Tab({Title = "📦 Bring Items", Icon = "package"}) do
     BringItemTab:Section({Title = "Сбор предметов"})
 
-    
+    local function BringItemsByName(name)
+        if DoingTheThings then return end
+        DoingTheThings = true
+        OldCFrameHere = LocalPlayer.Character.HumanoidRootPart.CFrame
+        
+        for _, Obj in pairs(Workspace.Items:GetChildren()) do
+            if Obj.Name == name and Obj:IsA("Model") and Obj.PrimaryPart then 
+                LocalPlayer.Character.HumanoidRootPart.CFrame = Obj.PrimaryPart.CFrame
+                DragItem(Obj)
+                wait(0.15)
+            end 
+        end
+        
+        DoingTheThings = false
+        LocalPlayer.Character.HumanoidRootPart.CFrame = OldCFrameHere
+    end
+
+    local function BringItemsByType(itemTypes)
+        if DoingTheThings then return end
+        DoingTheThings = true
+        OldCFrameHere = LocalPlayer.Character.HumanoidRootPart.CFrame
+        
+        for _, Obj in pairs(Workspace.Items:GetChildren()) do
+            if Obj:IsA("Model") and Obj.PrimaryPart then
+                local found = false
+                for _, itemType in ipairs(itemTypes) do
+                    if Obj.Name == itemType then
+                        found = true
+                        break
+                    end
+                end
+                if found then
+                    LocalPlayer.Character.HumanoidRootPart.CFrame = Obj.PrimaryPart.CFrame
+                    DragItem(Obj)
+                    wait(0.15)
+                end
+            end   
+        end
+        
         DoingTheThings = false
         LocalPlayer.Character.HumanoidRootPart.CFrame = OldCFrameHere
     end
@@ -642,65 +680,7 @@ local BringItemTab = Window:Tab({Title = "📦 Bring Items", Icon = "package"}) 
                     wait(0.15)
                 end  
             end
-            local function BringItemsByName(name)
-    if DoingTheThings then return end
-    DoingTheThings = true
-    
-    local startTime = tick()
-    local maxTime = 30 -- Максимум 30 секунд
-    
-    -- Сохраняем начальную позицию
-    local character = LocalPlayer.Character
-    if not character then 
-        DoingTheThings = false
-        return 
-    end
-    
-    local hrp = character:WaitForChild("HumanoidRootPart")
-    OldCFrameHere = hrp.CFrame
-    
-    -- Собираем все предметы этого типа
-    local itemsToCollect = {}
-    for _, Obj in pairs(Workspace.Items:GetChildren()) do
-        if Obj.Name == name and Obj:IsA("Model") and Obj.PrimaryPart then 
-            table.insert(itemsToCollect, Obj)
-        end 
-    end
-    
-    -- Сортируем по расстоянию (ближайшие сначала)
-    table.sort(itemsToCollect, function(a, b)
-        return (hrp.Position - a.PrimaryPart.Position).Magnitude < (hrp.Position - b.PrimaryPart.Position).Magnitude
-    end)
-    
-    -- Собираем предметы
-    for _, item in ipairs(itemsToCollect) do
-        if tick() - startTime > maxTime then break end -- Защита от зависания
-        
-        -- Телепортируемся к предмету
-        hrp.CFrame = item.PrimaryPart.CFrame + Vector3.new(0, 2, 0) -- Немного выше
-        
-        -- Ждем стабилизации
-        wait(0.3)
-        
-        -- Собираем предмет
-        DragItem(item)
-        
-        -- Ждем перед следующим предметом
-        wait(0.5)
-    end
-    
-    -- Возвращаемся на место
-    wait(0.5)
-    hrp.CFrame = OldCFrameHere
-    
-    DoingTheThings = false
-    
-    Window:Notify({
-        Title = "✅ Сбор завершен",
-        Desc = string.format("Собрано %d предметов: %s", #itemsToCollect, name),
-        Time = 3
-    })
-end
+            
             DoingTheThings = false
             LocalPlayer.Character.HumanoidRootPart.CFrame = OldCFrameHere
         end
