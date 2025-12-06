@@ -52,8 +52,7 @@ local function DragItem(Item)
 end
 
 -- ВКЛАДКА INFO
-local Tab2 = Window:Tab({Title = "ℹ️ Info", Icon = "info"})
-
+local Tab2 = Window:Tab({Title = "ℹ️ Info", Icon = "info"}) do
 local function getServerInfo()
     local Players = game:GetService("Players")
     local playerCount = #Players:GetPlayers()
@@ -98,7 +97,7 @@ task.spawn(function()
 end)
 
 -- ВКЛАДКА PLAYER
-local PlayerTab = Window:Tab({Title = "👤 Player", Icon = "user"})
+local PlayerTab = Window:Tab({Title = "👤 Player", Icon = "user"}) do
 
 -- Noclip
 local noclipEnabled = false
@@ -530,7 +529,7 @@ EspTab:Toggle({
 })
 
 -- ВКЛАДКА GAME
-local GameTab = Window:Tab({Title = "🎮 Game", Icon = "gamepad-2"})
+local GameTab = Window:Tab({Title = "🎮 Game", Icon = "gamepad-2"}) do
 
 GameTab:Label({
     Title = "Примечание",
@@ -789,7 +788,7 @@ BringItemTab:Button({
 })
 
 -- ВКЛАДКА DISCORD
-local DiscordTab = Window:Tab({Title = "💬 Discord", Icon = "message-circle"})
+local DiscordTab = Window:Tab({Title = "💬 Discord", Icon = "message-circle"}) do
 
 DiscordTab:Button({
     Title = "📋 Скопировать Discord",
