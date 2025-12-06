@@ -1,0 +1,1007 @@
+-- 99 Nights in the forest - by Iliankytb
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/SaulGoodmanScripter/SAUL_HUB/refs/heads/main/Library%20.lua"))()
+local Window = Library:Window({
+    Title = "99 Nights in the Forest",
+    Desc = "by Iliankytb | V.0.33",
+    Icon = "tree-pine",
+    Theme = "Dark", -- Используем одну из доступных тем
+    Config = {
+        Keybind = Enum.KeyCode.K,
+        Size = UDim2.new(0, 550, 0, 350)
+    },
+    CloseUIButton = {
+        Enabled = true,
+        Text = "Закрыть"
+    }
+})
+
+-- Твои переменные
+local V = "V.0.33"
+local infoGameName = MarketplaceService:GetProductInfo(game.GameId)
+local ActiveEspItems, ActiveEspEnemy, ActiveEspChildren, ActiveEspPeltTrader = false, false, false, false
+local ActiveNoclip, ActivateInfiniteJump, ActiveSpeedBoost, ActivateFly = false, false, false, false
+local ActiveNoCooldownPrompt, ActiveNoFog, ActiveAutoChopTree, ActiveKillAura = false, false, false, false
+local DistanceForKillAura = 25
+local DistanceForAutoChopTree = 25
+local ValueSpeed = 16
+local OldSpeed = 16
+local LimitRangerEsp = 100
+local DisableLimitRangerEsp = false
+local LineESPEnabled = false
+local iyflyspeed = 1
+local DoingTheThings = false
+local OldCFrameHere = nil
+local TextBoxText = ""
+local isInTheMap = "no"
+local HowManyItemCanShowUp = 0
+
+-- Твоя функция DragItem
+local function DragItem(Item)
+    task.spawn(function()
+        for _, tool in pairs(game:GetService("Players").LocalPlayer.Inventory:GetChildren()) do
+            if tool:IsA("Model") and tool:GetAttribute("NumberItems") and tool:GetAttribute("Capacity") and tool:GetAttribute("NumberItems") < tool:GetAttribute("Capacity") then
+                task.spawn(function()
+                    local args = {tool, Item}
+                    game:GetService("ReplicatedStorage"):WaitForChild("RemoteEvents"):WaitForChild("RequestBagStoreItem"):InvokeServer(unpack(args))
+                    wait(0.1)
+                end)
+            end
+            wait(0.25)
+        end
+    end)
+end
+
+-- ВКЛАДКА INFO
+local InfoTab = Window:Tab({Title = "ℹ️ Info", Icon = "info"})
+
+local function getServerInfo()
+    local Players = game:GetService("Players")
+    local playerCount = #Players:GetPlayers()
+    local maxPlayers = Players.MaxPlayers
+    local isStudio = RunService:IsStudio()
+    
+    return {
+        PlaceId = game.PlaceId,
+        JobId = game.JobId,
+        IsStudio = isStudio,
+        CurrentPlayers = playerCount,
+        MaxPlayers = maxPlayers
+    }
+end
+
+InfoTab:Label({
+    Title = "Версия скрипта",
+    Desc = V
+})
+
+-- Обновление информации о сервере
+local serverInfoLabel = InfoTab:Label({
+    Title = "Информация о сервере",
+    Desc = "Загрузка..."
+})
+
+task.spawn(function()
+    while true do
+        local updatedInfo = getServerInfo()
+        local updatedContent = string.format(
+            "🎮 Игра: %s\n📌 PlaceId: %s\n🔑 JobId: %s\n🧪 Studio: %s\n👥 Игроки: %d/%d",
+            infoGameName.Name,
+            updatedInfo.PlaceId,
+            updatedInfo.JobId,
+            tostring(updatedInfo.IsStudio),
+            updatedInfo.CurrentPlayers,
+            updatedInfo.MaxPlayers
+        )
+        serverInfoLabel:SetDesc(updatedContent)
+        wait(5)
+    end
+end)
+
+-- ВКЛАДКА PLAYER
+local PlayerTab = Window:Tab({Title = "👤 Player", Icon = "user"})
+
+-- Noclip
+local noclipEnabled = false
+local noclipConnection
+
+PlayerTab:Toggle({
+    Title = "👻 Noclip",
+    Desc = "Ходить сквозь стены",
+    Value = false,
+    Callback = function(v)
+        ActiveNoclip = v
+        local character = LocalPlayer.Character
+
+        if v then
+            if character then
+                for _, part in pairs(character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+            end
+
+            if noclipConnection then
+                noclipConnection:Disconnect()
+            end
+
+            noclipConnection = RunService.Stepped:Connect(function()
+                if ActiveNoclip and LocalPlayer.Character then
+                    for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+                        if part:IsA("BasePart") then
+                            part.CanCollide = false
+                        end
+                    end
+                end
+            end)
+        else
+            if noclipConnection then
+                noclipConnection:Disconnect()
+                noclipConnection = nil
+            end
+
+            if character then
+                for _, part in pairs(character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = true
+                    end
+                end
+            end
+        end
+    end
+})
+
+-- Infinite Jump
+local infJumpEnabled = false
+local jumpConnection
+
+PlayerTab:Toggle({
+    Title = "🏀 Infinite Jump",
+    Desc = "Бесконечные прыжки",
+    Value = false,
+    Callback = function(v)
+        ActivateInfiniteJump = v
+
+        if v then
+            jumpConnection = UserInputService.JumpRequest:Connect(function()
+                if ActivateInfiniteJump and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+                    LocalPlayer.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                end
+            end)
+        else
+            if jumpConnection then
+                jumpConnection:Disconnect()
+                jumpConnection = nil
+            end
+        end
+    end
+})
+
+-- Speed
+PlayerTab:Slider({
+    Title = "⚡ Скорость",
+    Desc = "Изменяет скорость передвижения",
+    Min = 16,
+    Max = 100,
+    Rounding = 0,
+    Value = 16,
+    Callback = function(val)
+        ValueSpeed = val
+        if ActiveSpeedBoost and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.WalkSpeed = val
+        end
+    end
+})
+
+PlayerTab:Toggle({
+    Title = "🚀 Ускорение",
+    Desc = "Включить увеличение скорости",
+    Value = false,
+    Callback = function(v)
+        ActiveSpeedBoost = v
+        if v then
+            OldSpeed = LocalPlayer.Character.Humanoid.WalkSpeed
+            LocalPlayer.Character.Humanoid.WalkSpeed = ValueSpeed
+        else
+            LocalPlayer.Character.Humanoid.WalkSpeed = OldSpeed
+        end
+    end
+})
+
+-- Fly
+local FLYING = false
+local IYMouse = LocalPlayer:GetMouse()
+local flyKeyDown, flyKeyUp
+
+local function sFLY(vfly)
+    repeat wait() until LocalPlayer.Character and LocalPlayer.Character:WaitForChild("HumanoidRootPart") and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    repeat wait() until IYMouse
+    if flyKeyDown or flyKeyUp then flyKeyDown:Disconnect() flyKeyUp:Disconnect() end
+
+    local T = LocalPlayer.Character:WaitForChild("HumanoidRootPart")
+    local CONTROL = {F = 0, B = 0, L = 0, R = 0, Q = 0, E = 0}
+    local lCONTROL = {F = 0, B = 0, L = 0, R = 0, Q = 0, E = 0}
+    local SPEED = 0
+
+    local function FLY()
+        FLYING = true
+        local BG = Instance.new('BodyGyro')
+        local BV = Instance.new('BodyVelocity')
+        BG.P = 9e4
+        BG.Parent = T
+        BV.Parent = T
+        BG.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+        BG.CFrame = T.CFrame
+        BV.Velocity = Vector3.new(0, 0, 0)
+        BV.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+        task.spawn(function()
+            repeat wait()
+                if not vfly and LocalPlayer.Character:FindFirstChildOfClass('Humanoid') then
+                    LocalPlayer.Character:FindFirstChildOfClass('Humanoid').PlatformStand = true
+                end
+                if CONTROL.L + CONTROL.R ~= 0 or CONTROL.F + CONTROL.B ~= 0 or CONTROL.Q + CONTROL.E ~= 0 then
+                    SPEED = 50
+                elseif not (CONTROL.L + CONTROL.R ~= 0 or CONTROL.F + CONTROL.B ~= 0 or CONTROL.Q + CONTROL.E ~= 0) and SPEED ~= 0 then
+                    SPEED = 0
+                end
+                if (CONTROL.L + CONTROL.R) ~= 0 or (CONTROL.F + CONTROL.B) ~= 0 or (CONTROL.Q + CONTROL.E) ~= 0 then
+                    BV.Velocity = ((Workspace.CurrentCamera.CoordinateFrame.lookVector * (CONTROL.F + CONTROL.B)) + ((Workspace.CurrentCamera.CoordinateFrame * CFrame.new(CONTROL.L + CONTROL.R, (CONTROL.F + CONTROL.B + CONTROL.Q + CONTROL.E) * 0.2, 0).p) - Workspace.CurrentCamera.CoordinateFrame.p)) * SPEED
+                    lCONTROL = {F = CONTROL.F, B = CONTROL.B, L = CONTROL.L, R = CONTROL.R}
+                elseif (CONTROL.L + CONTROL.R) == 0 and (CONTROL.F + CONTROL.B) == 0 and (CONTROL.Q + CONTROL.E) == 0 and SPEED ~= 0 then
+                    BV.Velocity = ((Workspace.CurrentCamera.CoordinateFrame.lookVector * (lCONTROL.F + lCONTROL.B)) + ((Workspace.CurrentCamera.CoordinateFrame * CFrame.new(lCONTROL.L + lCONTROL.R, (lCONTROL.F + lCONTROL.B + CONTROL.Q + CONTROL.E) * 0.2, 0).p) - Workspace.CurrentCamera.CoordinateFrame.p)) * SPEED
+                else
+                    BV.Velocity = Vector3.new(0, 0, 0)
+                end
+                BG.CFrame = Workspace.CurrentCamera.CoordinateFrame
+            until not FLYING
+            CONTROL = {F = 0, B = 0, L = 0, R = 0, Q = 0, E = 0}
+            lCONTROL = {F = 0, B = 0, L = 0, R = 0, Q = 0, E = 0}
+            SPEED = 0
+            BG:Destroy()
+            BV:Destroy()
+            if LocalPlayer.Character:FindFirstChildOfClass('Humanoid') then
+                LocalPlayer.Character:FindFirstChildOfClass('Humanoid').PlatformStand = false
+            end
+        end)
+    end
+    
+    flyKeyDown = IYMouse.KeyDown:Connect(function(KEY)
+        if KEY:lower() == 'w' then
+            CONTROL.F = iyflyspeed
+        elseif KEY:lower() == 's' then
+            CONTROL.B = -iyflyspeed
+        elseif KEY:lower() == 'a' then
+            CONTROL.L = -iyflyspeed
+        elseif KEY:lower() == 'd' then 
+            CONTROL.R = iyflyspeed
+        elseif KEY:lower() == 'e' then
+            CONTROL.Q = iyflyspeed*2
+        elseif KEY:lower() == 'q' then
+            CONTROL.E = -iyflyspeed*2
+        end
+        pcall(function() Workspace.CurrentCamera.CameraType = Enum.CameraType.Track end)
+    end)
+    
+    flyKeyUp = IYMouse.KeyUp:Connect(function(KEY)
+        if KEY:lower() == 'w' then
+            CONTROL.F = 0
+        elseif KEY:lower() == 's' then
+            CONTROL.B = 0
+        elseif KEY:lower() == 'a' then
+            CONTROL.L = 0
+        elseif KEY:lower() == 'd' then
+            CONTROL.R = 0
+        elseif KEY:lower() == 'e' then
+            CONTROL.Q = 0
+        elseif KEY:lower() == 'q' then
+            CONTROL.E = 0
+        end
+    end)
+    FLY()
+end
+
+local function NOFLY()
+    FLYING = false
+    if flyKeyDown or flyKeyUp then flyKeyDown:Disconnect() flyKeyUp:Disconnect() end
+    if LocalPlayer.Character:FindFirstChildOfClass('Humanoid') then
+        LocalPlayer.Character:FindFirstChildOfClass('Humanoid').PlatformStand = false
+    end
+    pcall(function() Workspace.CurrentCamera.CameraType = Enum.CameraType.Custom end)
+end
+
+PlayerTab:Slider({
+    Title = "🕊️ Скорость полета",
+    Desc = "Рекомендуется 1-5",
+    Min = 1,
+    Max = 10,
+    Rounding = 1,
+    Value = 1,
+    Callback = function(val)
+        iyflyspeed = val
+    end
+})
+
+PlayerTab:Toggle({
+    Title = "🕊️ Fly",
+    Desc = "Летать (F для вкл/выкл)",
+    Value = false,
+    Callback = function(v)
+        ActivateFly = v
+        if not FLYING and ActivateFly then
+            NOFLY()
+            wait()
+            sFLY()
+        elseif FLYING and not ActivateFly then
+            NOFLY()
+        end
+    end
+})
+
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    if input.KeyCode == Enum.KeyCode.F then
+        if not FLYING and ActivateFly then
+            NOFLY()
+            wait()
+            sFLY()
+        elseif FLYING and ActivateFly then
+            NOFLY()
+        end
+    end
+end)
+
+-- No Fog
+PlayerTab:Toggle({
+    Title = "🌫️ No Fog",
+    Desc = "Убрать туман",
+    Value = false,
+    Callback = function(v)
+        ActiveNoFog = v
+        if v then
+            for _, part in pairs(Workspace.Map.Boundaries:GetChildren()) do 
+                if part:IsA("Part") then
+                    part:Destroy()
+                end
+            end
+        end
+    end
+})
+
+-- Instant Prompt
+PlayerTab:Toggle({
+    Title = "⚡ Instant Prompt",
+    Desc = "Мгновенное взаимодействие",
+    Value = false,
+    Callback = function(v)
+        ActiveNoCooldownPrompt = v
+        if v then
+            for _, Assets in pairs(Workspace:GetDescendants()) do  
+                if Assets:IsA("ProximityPrompt") and Assets.HoldDuration ~= 0 then 
+                    Assets:SetAttribute("HoldDurationOld", Assets.HoldDuration)
+                    Assets.HoldDuration = 0
+                end 
+            end  
+        else 
+            for _, Assets in pairs(Workspace:GetDescendants()) do  
+                if Assets:IsA("ProximityPrompt") and Assets:GetAttribute("HoldDurationOld") and Assets:GetAttribute("HoldDurationOld") ~= 0 then 
+                    Assets.HoldDuration = Assets:GetAttribute("HoldDurationOld")
+                end 
+            end  
+        end
+    end
+})
+
+-- TP to Campfire
+PlayerTab:Button({
+    Title = "🔥 TP to Campfire",
+    Desc = "Телепорт к костру",
+    Callback = function()
+        if LocalPlayer.Character then
+            LocalPlayer.Character:WaitForChild("HumanoidRootPart").CFrame = Workspace.Map.Campground.MainFire.PrimaryPart.CFrame + Vector3.new(0,10,0)
+        end
+    end
+})
+
+-- ВКЛАДКА ESP
+local EspTab = Window:Tab({Title = "👁️ ESP", Icon = "eye"})
+
+-- ESP Items
+EspTab:Toggle({
+    Title = "📦 ESP Items",
+    Desc = "Подсветка предметов",
+    Value = false,
+    Callback = function(v)
+        ActiveEspItems = v
+        if v then
+            for _, Obj in pairs(Workspace.Items:GetChildren()) do 
+                if Obj:IsA("Model") and Obj.PrimaryPart and not Obj:FindFirstChildOfClass("Highlight") then
+                    local highlight = Instance.new("Highlight")
+                    highlight.Name = "ESP_Highlight"
+                    highlight.Adornee = Obj
+                    highlight.FillColor = Color3.fromRGB(255,255,0)
+                    highlight.FillTransparency = 1
+                    highlight.OutlineColor = Color3.fromRGB(255,255,0)
+                    highlight.OutlineTransparency = 0
+                    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    highlight.Parent = Obj
+                end 
+            end
+        else
+            for _, Obj in pairs(Workspace.Items:GetChildren()) do 
+                if Obj:IsA("Model") and Obj:FindFirstChildOfClass("Highlight") then
+                    Obj:FindFirstChildOfClass("Highlight"):Destroy()
+                end 
+            end
+        end
+    end
+})
+
+-- ESP Enemy
+EspTab:Toggle({
+    Title = "👹 ESP Enemy",
+    Desc = "Подсветка врагов",
+    Value = false,
+    Callback = function(v)
+        ActiveEspEnemy = v
+        if v then
+            for _, Obj in pairs(Workspace.Characters:GetChildren()) do 
+                if Obj:IsA("Model") and Obj.PrimaryPart and not (Obj.Name == "Lost Child" or Obj.Name == "Lost Child2" or Obj.Name == "Lost Child3" or Obj.Name == "Lost Child4" or Obj.Name == "Pelt Trader") and not Obj:FindFirstChildOfClass("Highlight") then
+                    local highlight = Instance.new("Highlight")
+                    highlight.Name = "ESP_Highlight"
+                    highlight.Adornee = Obj
+                    highlight.FillColor = Color3.fromRGB(255,0,0)
+                    highlight.FillTransparency = 1
+                    highlight.OutlineColor = Color3.fromRGB(255,0,0)
+                    highlight.OutlineTransparency = 0
+                    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    highlight.Parent = Obj
+                end 
+            end
+        else
+            for _, Obj in pairs(Workspace.Characters:GetChildren()) do 
+                if Obj:IsA("Model") and Obj:FindFirstChildOfClass("Highlight") then
+                    Obj:FindFirstChildOfClass("Highlight"):Destroy()
+                end 
+            end
+        end
+    end
+})
+
+-- ESP Children
+EspTab:Toggle({
+    Title = "👶 ESP Children",
+    Desc = "Подсветка детей",
+    Value = false,
+    Callback = function(v)
+        ActiveEspChildren = v
+        if v then
+            for _, Obj in pairs(Workspace.Characters:GetChildren()) do 
+                if Obj:IsA("Model") and Obj.PrimaryPart and (Obj.Name == "Lost Child" or Obj.Name == "Lost Child2" or Obj.Name == "Lost Child3" or Obj.Name == "Lost Child4") and not Obj:FindFirstChildOfClass("Highlight") then
+                    local highlight = Instance.new("Highlight")
+                    highlight.Name = "ESP_Highlight"
+                    highlight.Adornee = Obj
+                    highlight.FillColor = Color3.fromRGB(0,255,0)
+                    highlight.FillTransparency = 1
+                    highlight.OutlineColor = Color3.fromRGB(0,255,0)
+                    highlight.OutlineTransparency = 0
+                    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    highlight.Parent = Obj
+                end 
+            end
+        else
+            for _, Obj in pairs(Workspace.Characters:GetChildren()) do 
+                if Obj:IsA("Model") and Obj:FindFirstChildOfClass("Highlight") then
+                    Obj:FindFirstChildOfClass("Highlight"):Destroy()
+                end 
+            end
+        end
+    end
+})
+
+-- ESP Pelt Trader
+EspTab:Toggle({
+    Title = "🦊 ESP Pelt Trader",
+    Desc = "Подсветка торговца",
+    Value = false,
+    Callback = function(v)
+        ActiveEspPeltTrader = v
+        if v then
+            for _, Obj in pairs(Workspace.Characters:GetChildren()) do 
+                if Obj:IsA("Model") and Obj.PrimaryPart and Obj.Name == "Pelt Trader" and not Obj:FindFirstChildOfClass("Highlight") then
+                    local highlight = Instance.new("Highlight")
+                    highlight.Name = "ESP_Highlight"
+                    highlight.Adornee = Obj
+                    highlight.FillColor = Color3.fromRGB(0,255,255)
+                    highlight.FillTransparency = 1
+                    highlight.OutlineColor = Color3.fromRGB(0,255,255)
+                    highlight.OutlineTransparency = 0
+                    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    highlight.Parent = Obj
+                end 
+            end
+        else
+            for _, Obj in pairs(Workspace.Characters:GetChildren()) do 
+                if Obj:IsA("Model") and Obj:FindFirstChildOfClass("Highlight") then
+                    Obj:FindFirstChildOfClass("Highlight"):Destroy()
+                end 
+            end
+        end
+    end
+})
+
+-- ВКЛАДКА GAME
+local GameTab = Window:Tab({Title = "🎮 Game", Icon = "gamepad-2"})
+
+GameTab:Label({
+    Title = "Примечание",
+    Desc = "Для Auto Chop Tree и Kill Aura нужен топор!"
+})
+
+-- Kill Aura
+GameTab:Slider({
+    Title = "🗡️ Дистанция Kill Aura",
+    Desc = "Радиус атаки",
+    Min = 25,
+    Max = 1000,
+    Rounding = 0,
+    Value = 25,
+    Callback = function(val)
+        DistanceForKillAura = val
+    end
+})
+
+GameTab:Toggle({
+    Title = "🗡️ Kill Aura",
+    Desc = "Автоатака врагов",
+    Value = false,
+    Callback = function(v)
+        ActiveKillAura = v
+    end
+})
+
+-- Auto Chop Tree
+GameTab:Slider({
+    Title = "🌳 Дистанция Auto Chop",
+    Desc = "Радиус рубки деревьев",
+    Min = 25,
+    Max = 1000,
+    Rounding = 0,
+    Value = 25,
+    Callback = function(val)
+        DistanceForAutoChopTree = val
+    end
+})
+
+GameTab:Toggle({
+    Title = "🌳 Auto Chop Tree",
+    Desc = "Автоматическая рубка деревьев",
+    Value = false,
+    Callback = function(v)
+        ActiveAutoChopTree = v
+    end
+})
+
+-- ВКЛАДКА BRING ITEM
+local BringItemTab = Window:Tab({Title = "📦 Bring Items", Icon = "package"})
+
+-- Функции для переноса предметов
+local function BringItemsByName(name)
+    if DoingTheThings then return end
+    DoingTheThings = true
+    OldCFrameHere = LocalPlayer.Character.HumanoidRootPart.CFrame
+    
+    for _, Obj in pairs(Workspace.Items:GetChildren()) do
+        if Obj.Name == name and Obj:IsA("Model") and Obj.PrimaryPart then 
+            LocalPlayer.Character.HumanoidRootPart.CFrame = Obj.PrimaryPart.CFrame
+            DragItem(Obj)
+            wait(0.15)
+        end 
+    end
+    
+    DoingTheThings = false
+    LocalPlayer.Character.HumanoidRootPart.CFrame = OldCFrameHere
+end
+
+local function BringItemsByType(itemTypes)
+    if DoingTheThings then return end
+    DoingTheThings = true
+    OldCFrameHere = LocalPlayer.Character.HumanoidRootPart.CFrame
+    
+    for _, Obj in pairs(Workspace.Items:GetChildren()) do
+        if Obj:IsA("Model") and Obj.PrimaryPart then
+            local found = false
+            for _, itemType in ipairs(itemTypes) do
+                if Obj.Name == itemType then
+                    found = true
+                    break
+                end
+            end
+            if found then
+                LocalPlayer.Character.HumanoidRootPart.CFrame = Obj.PrimaryPart.CFrame
+                DragItem(Obj)
+                wait(0.15)
+            end
+        end   
+    end
+    
+    DoingTheThings = false
+    LocalPlayer.Character.HumanoidRootPart.CFrame = OldCFrameHere
+end
+
+BringItemTab:Button({
+    Title = "📦 Все предметы",
+    Desc = "Перенести все предметы",
+    Callback = function()
+        if DoingTheThings then return end
+        DoingTheThings = true
+        OldCFrameHere = LocalPlayer.Character.HumanoidRootPart.CFrame
+        
+        for _, Obj in pairs(Workspace.Items:GetChildren()) do
+            if Obj:IsA("Model") and Obj.PrimaryPart then 
+                LocalPlayer.Character.HumanoidRootPart.CFrame = Obj.PrimaryPart.CFrame
+                DragItem(Obj)
+                wait(0.15)
+            end  
+        end
+        
+        DoingTheThings = false
+        LocalPlayer.Character.HumanoidRootPart.CFrame = OldCFrameHere
+    end
+})
+
+BringItemTab:Button({
+    Title = "🪵 Все бревна",
+    Desc = "Перенести все бревна",
+    Callback = function()
+        BringItemsByName("Log")
+    end
+})
+
+BringItemTab:Button({
+    Title = "⚫️ Весь уголь",
+    Desc = "Перенести весь уголь",
+    Callback = function()
+        BringItemsByName("Coal")
+    end
+})
+
+BringItemTab:Button({
+    Title = "⛽️ Все канистры",
+    Desc = "Перенести все канистры",
+    Callback = function()
+        BringItemsByName("Fuel Canister")
+    end
+})
+
+BringItemTab:Button({
+    Title = "🥕 Все морковки",
+    Desc = "Перенести всю морковь",
+    Callback = function()
+        BringItemsByName("Carrot")
+    end
+})
+
+BringItemTab:Button({
+    Title = "🛢️ Все топливо",
+    Desc = "Перенести все топливо",
+    Callback = function()
+        BringItemsByType({"Log", "Fuel Canister", "Coal", "Oil Barrel"})
+    end
+})
+
+BringItemTab:Button({
+    Title = "🔩 Все запчасти",
+    Desc = "Перенести все запчасти",
+    Callback = function()
+        BringItemsByType({"Tyre", "Sheet Metal", "Broken Fan", "Bolt", "Old Radio", "UFO Junk", "UFO Scrap", "Broken Microwave"})
+    end
+})
+
+BringItemTab:Button({
+    Title = "🔫 Все патроны",
+    Desc = "Перенести все патроны",
+    Callback = function()
+        BringItemsByType({"Rifle Ammo", "Revolver Ammo"})
+    end
+})
+
+BringItemTab:Button({
+    Title = "👶 Все дети",
+    Desc = "Перенести всех детей",
+    Callback = function()
+        if DoingTheThings then return end
+        DoingTheThings = true
+        OldCFrameHere = LocalPlayer.Character.HumanoidRootPart.CFrame
+        
+        for _, Obj in pairs(Workspace.Characters:GetChildren()) do
+            if Obj:IsA("Model") and Obj.PrimaryPart and (Obj.Name == "Lost Child" or Obj.Name == "Lost Child2" or Obj.Name == "Lost Child3" or Obj.Name == "Lost Child4") then 
+                LocalPlayer.Character.HumanoidRootPart.CFrame = Obj.PrimaryPart.CFrame
+                DragItem(Obj)
+                wait(0.15)
+            end  
+        end
+        
+        DoingTheThings = false
+        LocalPlayer.Character.HumanoidRootPart.CFrame = OldCFrameHere
+    end
+})
+
+BringItemTab:Button({
+    Title = "🍎 Вся еда",
+    Desc = "Перенести всю еду",
+    Callback = function()
+        BringItemsByType({"Cake", "Carrot", "Morsel", "Meat? Sandwich"})
+    end
+})
+
+BringItemTab:Button({
+    Title = "🩹 Все бинты",
+    Desc = "Перенести все бинты",
+    Callback = function()
+        BringItemsByName("Bandage")
+    end
+})
+
+BringItemTab:Button({
+    Title = "💊 Все аптечки",
+    Desc = "Перенести все аптечки",
+    Callback = function()
+        BringItemsByName("MedKit")
+    end
+})
+
+-- Поиск предметов по имени
+local itemSearchLabel = BringItemTab:Label({
+    Title = "Поиск предмета",
+    Desc = "Введите название предмета"
+})
+
+local itemSearchBox = BringItemTab:Textbox({
+    Title = "🔍 Поиск предмета",
+    Desc = "Название предмета (используйте ESP)",
+    Placeholder = "Введите название...",
+    Value = "",
+    ClearText = false,
+    Callback = function(text)
+        TextBoxText = text
+        isInTheMap = "нет"
+        HowManyItemCanShowUp = 0
+        
+        for _, Obj in pairs(Workspace.Items:GetChildren()) do
+            if Obj.Name == TextBoxText and Obj:IsA("Model") and Obj.PrimaryPart then 
+                HowManyItemCanShowUp = HowManyItemCanShowUp + 1
+                isInTheMap = "да"
+            end 
+        end
+        
+        itemSearchLabel:SetDesc(string.format("Предмет найден: %s (x%d)", isInTheMap, HowManyItemCanShowUp))
+    end
+})
+
+BringItemTab:Button({
+    Title = "📦 Перенести найденное",
+    Desc = "Перенести предметы по названию",
+    Callback = function()
+        if TextBoxText and TextBoxText ~= "" then
+            BringItemsByName(TextBoxText)
+        end
+    end
+})
+
+-- ВКЛАДКА DISCORD
+local DiscordTab = Window:Tab({Title = "💬 Discord", Icon = "message-circle"})
+
+DiscordTab:Button({
+    Title = "📋 Скопировать Discord",
+    Desc = "Ссылка на Discord сервер",
+    Callback = function()
+        setclipboard("https://discord.gg/E2TqYRsRP4")
+        Window:Notify({
+            Title = "✅ Скопировано",
+            Desc = "Ссылка скопирована в буфер",
+            Time = 3
+        })
+    end
+})
+
+-- ВКЛАДКА SETTINGS
+local SettingsTab = Window:Tab({Title = "⚙️ Settings", Icon = "settings"})
+
+SettingsTab:Slider({
+    Title = "📏 Дистанция ESP",
+    Desc = "Максимальная дистанция ESP",
+    Min = 25,
+    Max = 1000,
+    Rounding = 0,
+    Value = 100,
+    Callback = function(val)
+        LimitRangerEsp = val
+    end
+})
+
+SettingsTab:Toggle({
+    Title = "♾️ Без лимита ESP",
+    Desc = "Отключить лимит дистанции",
+    Value = false,
+    Callback = function(v)
+        DisableLimitRangerEsp = v
+    end
+})
+
+SettingsTab:Toggle({
+    Title = "📐 Линии ESP",
+    Desc = "Линии от камеры к объектам",
+    Value = false,
+    Callback = function(v)
+        LineESPEnabled = v
+    end
+})
+
+-- Смена темы
+SettingsTab:Dropdown({
+    Title = "🎨 Сменить тему",
+    Desc = "Выберите тему интерфейса",
+    Options = {"Dark", "Amethyst", "Sapphire", "Amber", "Topaz", "NewYear"},
+    Value = "Dark",
+    MultiSelect = false,
+    Callback = function(choice)
+        Window:ChangeTheme(choice)
+    end
+})
+
+-- Unload Cheat
+SettingsTab:Button({
+    Title = "🗑️ Выгрузить читы",
+    Desc = "Отключить все функции",
+    Callback = function()
+        -- Здесь можно добавить логику выгрузки
+        Window:Notify({
+            Title = "ℹ️ Информация",
+            Desc = "Перезапустите игру для полной выгрузки",
+            Time = 5
+        })
+    end
+})
+
+-- Автоматические функции
+task.spawn(function()
+    while true do
+        -- Auto Chop Tree
+        if ActiveAutoChopTree and LocalPlayer.Character then
+            local character = LocalPlayer.Character
+            local hrp = character:WaitForChild("HumanoidRootPart")
+            local weapon = (LocalPlayer.Inventory:FindFirstChild("Old Axe") or 
+                           LocalPlayer.Inventory:FindFirstChild("Good Axe") or 
+                           LocalPlayer.Inventory:FindFirstChild("Strong Axe") or 
+                           LocalPlayer.Inventory:FindFirstChild("Chainsaw"))
+            
+            if weapon then
+                -- Деревья в Foliage
+                for _, tree in pairs(Workspace.Map.Foliage:GetChildren()) do
+                    if tree:IsA("Model") and (tree.Name == "Small Tree" or tree.Name == "TreeBig1" or tree.Name == "TreeBig2") and tree.PrimaryPart then
+                        local distance = (tree.PrimaryPart.Position - hrp.Position).Magnitude
+                        if distance <= DistanceForAutoChopTree then
+                            game:GetService("ReplicatedStorage").RemoteEvents.ToolDamageObject:InvokeServer(tree, weapon, 999, hrp.CFrame)
+                        end
+                    end
+                end
+                
+                -- Деревья в Landmarks
+                for _, tree in pairs(Workspace.Map.Landmarks:GetChildren()) do
+                    if tree:IsA("Model") and (tree.Name == "Small Tree" or tree.Name == "TreeBig1" or tree.Name == "TreeBig2") and tree.PrimaryPart then
+                        local distance = (tree.PrimaryPart.Position - hrp.Position).Magnitude
+                        if distance <= DistanceForAutoChopTree then
+                            game:GetService("ReplicatedStorage").RemoteEvents.ToolDamageObject:InvokeServer(tree, weapon, 999, hrp.CFrame)
+                        end
+                    end
+                end
+            end
+        end
+        
+        -- Kill Aura
+        if ActiveKillAura and LocalPlayer.Character then
+            local character = LocalPlayer.Character
+            local hrp = character:WaitForChild("HumanoidRootPart")
+            local weapon = (LocalPlayer.Inventory:FindFirstChild("Old Axe") or 
+                           LocalPlayer.Inventory:FindFirstChild("Good Axe") or 
+                           LocalPlayer.Inventory:FindFirstChild("Strong Axe") or 
+                           LocalPlayer.Inventory:FindFirstChild("Chainsaw"))
+            
+            if weapon then
+                for _, enemy in pairs(Workspace.Characters:GetChildren()) do
+                    if enemy:IsA("Model") and enemy.PrimaryPart then
+                        local distance = (enemy.PrimaryPart.Position - hrp.Position).Magnitude
+                        if distance <= DistanceForKillAura then
+                            game:GetService("ReplicatedStorage").RemoteEvents.ToolDamageObject:InvokeServer(enemy, weapon, 999, hrp.CFrame)
+                        end
+                    end
+                end
+            end
+        end
+        
+        wait(0.1)
+    end
+end)
+
+-- Обработчики добавления/удаления объектов
+Workspace.DescendantAdded:Connect(function(child)
+    wait(0.75)
+    
+    if ActiveNoFog and child.Parent == Workspace.Map.Boundaries and child:IsA("Part") then
+        child:Destroy()
+    end
+    
+    if ActiveNoCooldownPrompt and child:IsA("ProximityPrompt") and child.HoldDuration ~= 0 then 
+        child:SetAttribute("HoldDurationOld", child.HoldDuration)
+        child.HoldDuration = 0
+    end
+    
+    -- ESP Items
+    if ActiveEspItems and child.Parent == Workspace.Items and child:IsA("Model") and child.PrimaryPart and not child:FindFirstChildOfClass("Highlight") then
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "ESP_Highlight"
+        highlight.Adornee = child
+        highlight.FillColor = Color3.fromRGB(255,255,0)
+        highlight.FillTransparency = 1
+        highlight.OutlineColor = Color3.fromRGB(255,255,0)
+        highlight.OutlineTransparency = 0
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Parent = child
+    end
+    
+    -- ESP Enemy
+    if ActiveEspEnemy and child.Parent == Workspace.Characters and child:IsA("Model") and child.PrimaryPart and not (child.Name == "Lost Child" or child.Name == "Lost Child2" or child.Name == "Lost Child3" or child.Name == "Lost Child4" or child.Name == "Pelt Trader") and not child:FindFirstChildOfClass("Highlight") then
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "ESP_Highlight"
+        highlight.Adornee = child
+        highlight.FillColor = Color3.fromRGB(255,0,0)
+        highlight.FillTransparency = 1
+        highlight.OutlineColor = Color3.fromRGB(255,0,0)
+        highlight.OutlineTransparency = 0
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Parent = child
+    end
+    
+    -- ESP Children
+    if ActiveEspChildren and child.Parent == Workspace.Characters and child:IsA("Model") and child.PrimaryPart and (child.Name == "Lost Child" or child.Name == "Lost Child2" or child.Name == "Lost Child3" or child.Name == "Lost Child4") and not child:FindFirstChildOfClass("Highlight") then
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "ESP_Highlight"
+        highlight.Adornee = child
+        highlight.FillColor = Color3.fromRGB(0,255,0)
+        highlight.FillTransparency = 1
+        highlight.OutlineColor = Color3.fromRGB(0,255,0)
+        highlight.OutlineTransparency = 0
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Parent = child
+    end
+    
+    -- ESP Pelt Trader
+    if ActiveEspPeltTrader and child.Parent == Workspace.Characters and child:IsA("Model") and child.PrimaryPart and child.Name == "Pelt Trader" and not child:FindFirstChildOfClass("Highlight") then
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "ESP_Highlight"
+        highlight.Adornee = child
+        highlight.FillColor = Color3.fromRGB(0,255,255)
+        highlight.FillTransparency = 1
+        highlight.OutlineColor = Color3.fromRGB(0,255,255)
+        highlight.OutlineTransparency = 0
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Parent = child
+    end
+end)
+
+Workspace.DescendantRemoving:Connect(function(child)
+    -- Удаление ESP при удалении объекта
+    if child:IsA("Model") and child:FindFirstChildOfClass("Highlight") then
+        child:FindFirstChildOfClass("Highlight"):Destroy()
+    end
+end)
+
+-- Уведомление при загрузке
+Window:Notify({
+    Title = "✅ 99 Nights in Forest",
+    Desc = "Скрипт загружен! Версия: " .. V,
+    Time = 5
+})
+
+print("🎮 99 Nights in Forest скрипт загружен!")
+print("👤 by Iliankytb | Версия: " .. V)
